@@ -113,7 +113,7 @@ export default function Home() {
 
   const handleConditionalLogin = async () => {
     try {
-      const optionRes = await axios.post(`${backend_url}/login_start`, {});
+      const optionRes = await axios.get(`${backend_url}/conditional_login_start`);
       const options = await optionRes.data;
 
       const authResponse = await startAuthentication({
