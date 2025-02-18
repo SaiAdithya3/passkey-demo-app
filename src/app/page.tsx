@@ -42,11 +42,11 @@ export default function Home() {
     //     setStatus("Conditional Authentication is not available.");
     //   }
     // };
-    handleConditionalLogin();
-
-
+    if(activeTab === "login") {
+      handleConditionalLogin();
+    }
     // checkConditionalMediationSupport();
-  }, []);
+  }, [activeTab]);
 
   const handleRegister = async () => {
     try {
