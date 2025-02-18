@@ -1,6 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
+import axios from 'axios';
+import { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/server';
+
+
+type PublicKeyCredentialHint = 'hybrid' | 'security-key' | 'client-device';
+type AttestationFormat = 'fido-u2f' | 'packed' | 'android-safetynet' | 'android-key' | 'tpm' | 'apple' | 'none';
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -8,25 +14,19 @@ export default function Home() {
 
   const handleRegister = async () => {
     try {
-      // Get registration options from server
-      const optionsRes = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      const options = await optionsRes.json();
+      const optionsRes = await axios.post('/api/auth/register', { username });
+      const options = optionsRes.data.json() as PublicKeyCredentialCreationOptionsJSON;
 
-      // Create credentials using WebAuthn
-      const regResponse = await startRegistration(options);
+      const regResponse = await startRegistration({optionsJSON: options});
 
-      // Verify registration with server
       const verificationRes = await fetch('/api/auth/verify-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(regResponse),
+        body: JSON.stringify({ username, regResponse }),
       });
       
       const verification = await verificationRes.json();
+      console.log(verification);
       
       if (verification.verified) {
         setStatus('Registration successful!');
