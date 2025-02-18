@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
+  browserSupportsWebAuthn,
+  platformAuthenticatorIsAvailable,
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
@@ -11,6 +13,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("register");
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState("");
+  const [isConditionalMediationAvailable, setIsConditionalMediationAvailable] = useState(false);
   const router = useRouter();
   const backend_url = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -20,6 +23,28 @@ export default function Home() {
       router.push("/dashboard");
     }
   }, [] );
+
+  useEffect(() => {
+    const checkConditionalMediationSupport = async () => {
+      const supported = browserSupportsWebAuthn() && 
+                       await platformAuthenticatorIsAvailable() &&
+                       window.PublicKeyCredential &&
+                       window.PublicKeyCredential.isConditionalMediationAvailable &&
+                       await window.PublicKeyCredential.isConditionalMediationAvailable();
+      
+      setIsConditionalMediationAvailable(supported);
+      
+      if (supported) {
+        // Start conditional authentication immediately
+        console.log("Conditional Authentication is available.")
+        handleConditionalLogin();
+      } else {
+        setStatus("Conditional Authentication is not available.");
+      }
+    };
+
+    checkConditionalMediationSupport();
+  }, []);
 
   const handleRegister = async () => {
     try {
@@ -85,6 +110,30 @@ export default function Home() {
       setStatus("Login failed!");
     }
   };
+
+  const handleConditionalLogin = async () => {
+    try {
+      const optionRes = await axios.post(`${backend_url}/login_start`, {});
+      const options = await optionRes.data;
+
+      const authResponse = await startAuthentication({
+        optionsJSON: options.publicKey,
+        useBrowserAutofill: true,
+      })
+
+      const verificationResponse = await axios.post(`${backend_url}/login_finish`, {
+        credential: authResponse,
+      });
+
+      const verification = await verificationResponse.data;
+      if (verification.token) {
+        setStatus("Conditional Login successful!");
+        localStorage.setItem("authToken", verification.token);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
