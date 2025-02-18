@@ -11,18 +11,19 @@ type AttestationFormat = 'fido-u2f' | 'packed' | 'android-safetynet' | 'android-
 export default function Home() {
   const [username, setUsername] = useState('');
   const [status, setStatus] = useState('');
+const backend_url = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const handleRegister = async () => {
     try {
-      const optionsRes = await axios.post('/api/auth/register', { username });
-      const options = optionsRes.data.json() as PublicKeyCredentialCreationOptionsJSON;
+      const optionsRes = await axios.post(`${backend_url}/register_start`, { username });
+      const options = await optionsRes.data ;
 
-      const regResponse = await startRegistration({optionsJSON: options});
+      const regResponse = await startRegistration({optionsJSON: options.challenge.publicKey});
 
-      const verificationRes = await fetch('/api/auth/verify-registration', {
+      const verificationRes = await fetch(`${backend_url}/register_finish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, regResponse }),
+        body: JSON.stringify({ username, credential: regResponse }),
       });
       
       const verification = await verificationRes.json();
