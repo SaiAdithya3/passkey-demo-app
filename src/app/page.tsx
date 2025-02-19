@@ -13,7 +13,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("register");
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState("");
-  const [isConditionalMediationAvailable, setIsConditionalMediationAvailable] = useState(false);
+  const [isConditionalMediationAvailable, setIsConditionalMediationAvailable] =
+    useState(false);
   const router = useRouter();
   const backend_url = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -22,30 +23,26 @@ export default function Home() {
     if (authToken) {
       router.push("/dashboard");
     }
-  }, [] );
+  }, []);
 
   useEffect(() => {
-    // const checkConditionalMediationSupport = async () => {
-    //   const supported = browserSupportsWebAuthn() && 
-    //                    await platformAuthenticatorIsAvailable() &&
-    //                    window.PublicKeyCredential &&
-    //                    window.PublicKeyCredential.isConditionalMediationAvailable &&
-    //                    await window.PublicKeyCredential.isConditionalMediationAvailable();
-      
-    //   setIsConditionalMediationAvailable(supported);
-      
-    //   if (supported) {
-    //     // Start conditional authentication immediately
-    //     console.log("Conditional Authentication is available.")
-    //     handleConditionalLogin();
-    //   } else {
-    //     setStatus("Conditional Authentication is not available.");
-    //   }
-    // };
-    if(activeTab === "login") {
-      handleConditionalLogin();
-    }
-    // checkConditionalMediationSupport();
+    const checkConditionalMediationSupport = async () => {
+      const supported =
+        await window.PublicKeyCredential.isConditionalMediationAvailable();
+      setIsConditionalMediationAvailable(supported);
+
+      if (activeTab === "login") {
+        if (supported) {
+          console.log("Conditional Authentication is available.");
+          handleConditionalLogin();
+        } else {
+          setStatus("Conditional Authentication is not available.");
+        }
+      }
+    };
+    handleConditionalLogin();
+
+    checkConditionalMediationSupport();
   }, [activeTab]);
 
   const handleRegister = async () => {
@@ -115,32 +112,37 @@ export default function Home() {
 
   const handleConditionalLogin = async () => {
     try {
-      const optionRes = await axios.get(`${backend_url}/conditional_login_start`);
+      const optionRes = await axios.get(
+        `${backend_url}/conditional_login_start`
+      );
       const options = await optionRes.data;
       const login_id = await options.login_id;
-      console.log("options: ", options)
+      console.log("options: ", options);
 
       const authResponse = await startAuthentication({
         optionsJSON: options.challenge.publicKey,
         // useBrowserAutofill: true,
-      })
-
-      const verificationResponse = await axios.post(`${backend_url}/conditional_login_finish`, {
-        credential: authResponse,
-        login_id
       });
 
-      const verification = await verificationResponse.data
+      const verificationResponse = await axios.post(
+        `${backend_url}/conditional_login_finish`,
+        {
+          credential: authResponse,
+          login_id,
+        }
+      );
+
+      const verification = await verificationResponse.data;
       console.log(verification);
       if (verification.token) {
         setStatus("Conditional Login successful!");
         localStorage.setItem("authToken", verification.token);
-        router.push("/dashboard")
+        router.push("/dashboard");
       }
     } catch (error) {
       console.log(error);
     }
-  }
+  };
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
