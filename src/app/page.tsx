@@ -1,8 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
-  browserSupportsWebAuthn,
-  platformAuthenticatorIsAvailable,
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
@@ -36,111 +34,181 @@ export default function Home() {
           console.log("Conditional Authentication is available.");
           handleConditionalLogin();
         } else {
-          setStatus("Conditional Authentication is not available.");
+          setStatus(
+            "Conditional Authentication is not available. Please login using username"
+          );
         }
       }
     };
-    handleConditionalLogin();
+    // handleConditionalLogin();
 
     checkConditionalMediationSupport();
   }, [activeTab]);
 
   const handleRegister = async () => {
     try {
-      const optionsRes = await axios.post(`${backend_url}/register_start`, {
-        username,
-      });
-      const options = await optionsRes.data;
+      if (!username) {
+        setStatus("Please enter a username");
+        return;
+      }
 
-      const regResponse = await startRegistration({
-        optionsJSON: options.challenge.publicKey,
-      });
+      const optionsRes = await axios
+        .post(`${backend_url}/register_start`, { username })
+        .catch((error) => {
+          setStatus(
+            error.response?.data?.message || "Failed to start registration"
+          );
+          throw error;
+        });
 
-      const verificationRes = await fetch(`${backend_url}/register_finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, credential: regResponse }),
-      });
+      const options = optionsRes.data;
 
-      const verification = await verificationRes.json();
+      let regResponse;
+      try {
+        regResponse = await startRegistration({
+          optionsJSON: options.challenge.publicKey,
+        });
+      } catch (error: any) {
+        if (error.name === "NotAllowedError") {
+          setStatus("Registration was cancelled");
+        } else {
+          setStatus("Failed to create passkey");
+        }
+        return;
+      }
 
-      console.log(verification);
+      const verificationRes = await axios
+        .post(`${backend_url}/register_finish`, {
+          username,
+          credential: regResponse,
+        })
+        .catch((error) => {
+          setStatus(
+            error.response?.data?.message || "Failed to verify registration"
+          );
+          throw error;
+        });
+
+      const verification = verificationRes.data;
 
       if (verification.token) {
         setStatus("Registration successful!");
         localStorage.setItem("authToken", verification.token);
+        router.push("/dashboard");
+      } else {
+        setStatus("Registration failed - no token received");
       }
-      router.push("/dashboard");
     } catch (error) {
       console.error(error);
-      setStatus("Registration failed!");
     }
   };
 
   const handleLogin = async () => {
     try {
-      const optionsRes = await axios.post(`${backend_url}/login_start`, {
-        username,
-      });
-      const options = await optionsRes.data;
+      if (!username) {
+        setStatus("Please enter a username");
+        return;
+      }
 
-      console.log(options);
+      const optionsRes = await axios
+        .post(`${backend_url}/login_start`, {
+          username,
+        })
+        .catch((error) => {
+          setStatus(error.response?.data?.details);
+          throw error;
+        });
 
-      const authResponse = await startAuthentication({
-        optionsJSON: options.publicKey,
-      });
+      const options = optionsRes.data;
 
-      const verificationRes = await fetch(`${backend_url}/login_finsih`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, credential: authResponse }),
-      });
+      let authResponse;
+      try {
+        authResponse = await startAuthentication({
+          optionsJSON: options.publicKey,
+        });
+      } catch (error: any) {
+        if (error.name === "NotAllowedError") {
+          setStatus("Login was cancelled");
+        } else {
+          setStatus("Failed to authenticate with passkey");
+        }
+        return;
+      }
 
-      const verification = await verificationRes.json();
-      console.log(verification);
+      const verificationRes = await axios
+        .post(`${backend_url}/login_finish`, {
+          username,
+          credential: authResponse,
+        })
+        .catch((error) => {
+          setStatus(error.response?.data?.message || "Failed to verify login");
+          throw error;
+        });
 
+      const verification = verificationRes.data;
       if (verification.token) {
         setStatus("Login successful!");
         localStorage.setItem("authToken", verification.token);
+        router.push("/dashboard");
+      } else {
+        setStatus("Login failed - no token received");
       }
-      router.push("/dashboard");
     } catch (error) {
       console.error(error);
-      setStatus("Login failed!");
     }
   };
 
   const handleConditionalLogin = async () => {
     try {
-      const optionRes = await axios.get(
-        `${backend_url}/conditional_login_start`
-      );
-      const options = await optionRes.data;
-      const login_id = await options.login_id;
-      console.log("options: ", options);
+      const optionRes = await axios
+        .get(`${backend_url}/conditional_login_start`)
+        .catch((error) => {
+          setStatus(
+            error.response?.data?.message || "Failed to start conditional login"
+          );
+          throw error;
+        });
 
-      const authResponse = await startAuthentication({
-        optionsJSON: options.challenge.publicKey,
-        // useBrowserAutofill: true,
-      });
+      const options = optionRes.data;
+      const login_id = options.login_id;
 
-      const verificationResponse = await axios.post(
-        `${backend_url}/conditional_login_finish`,
-        {
+      let authResponse;
+      try {
+        authResponse = await startAuthentication({
+          optionsJSON: options.challenge.publicKey,
+        });
+      } catch (error: any) {
+        if (error.name === "NotAllowedError") {
+          setStatus("Conditional login was cancelled");
+        } else {
+          setStatus("Failed to authenticate with passkey");
+        }
+        return;
+      }
+
+      const verificationResponse = await axios
+        .post(`${backend_url}/conditional_login_finish`, {
           credential: authResponse,
           login_id,
-        }
-      );
+        })
+        .catch((error) => {
+          setStatus(
+            error.response?.data?.message ||
+              "Failed to verify conditional login"
+          );
+          throw error;
+        });
 
-      const verification = await verificationResponse.data;
-      console.log(verification);
+      const verification = verificationResponse.data;
       if (verification.token) {
         setStatus("Conditional Login successful!");
         localStorage.setItem("authToken", verification.token);
         router.push("/dashboard");
+      } else {
+        setStatus("Conditional login failed - no token received");
       }
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   };
 
@@ -173,8 +241,6 @@ export default function Home() {
             Login
           </button>
         </div>
-
-        {/* Form Content */}
         <div className="space-y-4">
           <input
             type="text"
