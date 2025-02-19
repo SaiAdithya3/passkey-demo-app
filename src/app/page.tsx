@@ -62,6 +62,8 @@ export default function Home() {
         });
 
       const options = optionsRes.data;
+      options.challenge.publicKey.authenticatorSelection.requireResidentKey = true
+      options.challenge.publicKey.authenticatorSelection.residentKey = "required"
 
       let regResponse;
       try {
